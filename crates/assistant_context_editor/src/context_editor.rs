@@ -2112,12 +2112,14 @@ impl ContextEditor {
             Some(model) => model.name().0,
             None => SharedString::from("No model selected"),
         };
-        let active_provider = LanguageModelRegistry::read_global(cx)
-            .default_model()
-            .map(|default| default.provider);
-        let provider_icon = match active_provider {
-            Some(provider) => provider.icon(),
-            None => IconName::Ai,
+        let show_icons = AgentSettings::get_global(cx).always_show_provider_icon;
+        let provider_icon: Option<IconName> = if show_icons {
+            LanguageModelRegistry::read_global(cx)
+                .default_model()
+                .map(|default| default.provider.icon())
+                .or(Some(IconName::Ai))
+        } else {
+            None
         };
         let focus_handle = self.editor().focus_handle(cx).clone();
 
@@ -2128,10 +2130,10 @@ impl ContextEditor {
                 .child(
                     h_flex()
                         .gap_0p5()
-                        .child(
-                            Icon::new(provider_icon)
-                                .color(Color::Accent)
-                                .size(IconSize::Small),
+                        .children(
+                            provider_icon.map(|icon| {
+                                Icon::new(icon).color(Color::Accent).size(IconSize::Small)
+                            }),
                         )
                         .child(
                             Label::new(model_name)
