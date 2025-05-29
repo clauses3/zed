@@ -2132,7 +2132,7 @@ impl ContextEditor {
                         .gap_0p5()
                         .children(
                             provider_icon.map(|icon| {
-                                Icon::new(icon).color(Color::Accent).size(IconSize::Small)
+                                Icon::new(icon).color(Color::Muted).size(IconSize::Small)
                             }),
                         )
                         .child(
