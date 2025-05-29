@@ -8,7 +8,7 @@ use assistant_context_editor::language_model_selector::{
     LanguageModelSelector, ToggleModelSelector, language_model_selector,
 };
 use language_model::{ConfiguredModel, LanguageModelRegistry};
-use settings::update_settings_file;
+use settings::{Settings, update_settings_file};
 use std::sync::Arc;
 use ui::{ButtonLike, PopoverMenuHandle, Tooltip, prelude::*};
 
@@ -109,24 +109,36 @@ impl Render for AgentModelSelector {
             .as_ref()
             .map(|model| model.model.name().0)
             .unwrap_or_else(|| SharedString::from("No model selected"));
+        let show_icons = AgentSettings::get_global(cx).always_show_provider_icon;
+        let provider_icon = show_icons
+            .then(|| {
+                model.as_ref().and_then(|m| {
+                    LanguageModelRegistry::read_global(cx)
+                        .provider(&m.model.provider_id())
+                        .map(|p| p.icon())
+                })
+            })
+            .flatten();
         PickerPopoverMenu::new(
             self.selector.clone(),
-            ButtonLike::new("active-model")
-                .child(
-                    Icon::new(provider_icon)
-                        .color(Color::Accent)
-                        .size(IconSize::Small),
-                )
-                .child(
-                    Label::new(model_name)
-                        .color(Color::Muted)
-                        .size(LabelSize::Small),
-                )
-                .child(
-                    Icon::new(IconName::ChevronDown)
-                        .color(Color::Muted)
-                        .size(IconSize::XSmall),
-                ),
+            ButtonLike::new("active-model").child(
+                h_flex()
+                    .gap_1()
+                    .items_center()
+                    .when_some(provider_icon, |el, icon| {
+                        el.child(Icon::new(icon).size(IconSize::XSmall).color(Color::Muted))
+                    })
+                    .child(
+                        Label::new(model_name)
+                            .size(LabelSize::Small)
+                            .color(Color::Muted),
+                    )
+                    .child(
+                        Icon::new(IconName::ChevronDown)
+                            .size(IconSize::XSmall)
+                            .color(Color::Muted),
+                    ),
+            ),
             move |window, cx| {
                 Tooltip::for_action_in(
                     "Change Model",

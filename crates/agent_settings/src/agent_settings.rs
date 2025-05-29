@@ -111,6 +111,7 @@ pub struct AgentSettings {
     pub model_parameters: Vec<LanguageModelParameters>,
     pub preferred_completion_mode: CompletionMode,
     pub enable_feedback: bool,
+    pub always_show_provider_icon: bool,
 }
 
 impl AgentSettings {
@@ -278,6 +279,7 @@ impl AgentSettingsContent {
                     model_parameters: Vec::new(),
                     preferred_completion_mode: None,
                     enable_feedback: None,
+                    always_show_provider_icon: None,
                     play_sound_when_agent_done: None,
                 },
                 VersionedAgentSettingsContent::V2(ref settings) => settings.clone(),
@@ -311,6 +313,7 @@ impl AgentSettingsContent {
                 model_parameters: Vec::new(),
                 preferred_completion_mode: None,
                 enable_feedback: None,
+                always_show_provider_icon: None,
                 play_sound_when_agent_done: None,
             },
             None => AgentSettingsContentV2::default(),
@@ -596,6 +599,7 @@ impl Default for VersionedAgentSettingsContent {
             model_parameters: Vec::new(),
             preferred_completion_mode: None,
             enable_feedback: None,
+            always_show_provider_icon: None,
             play_sound_when_agent_done: None,
         })
     }
@@ -682,6 +686,10 @@ pub struct AgentSettingsContentV2 {
     ///
     /// Default: true
     enable_feedback: Option<bool>,
+    /// Whether to always show provider icons in the agent panel.
+    ///
+    /// Default: false
+    always_show_provider_icon: Option<bool>,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Default)]
@@ -895,6 +903,10 @@ impl Settings for AgentSettings {
                 value.preferred_completion_mode,
             );
             merge(&mut settings.enable_feedback, value.enable_feedback);
+            merge(
+                &mut settings.always_show_provider_icon,
+                value.always_show_provider_icon,
+            );
 
             settings
                 .model_parameters
@@ -1030,6 +1042,7 @@ mod tests {
                             stream_edits: None,
                             single_file_review: None,
                             enable_feedback: None,
+                            always_show_provider_icon: None,
                             model_parameters: Vec::new(),
                             preferred_completion_mode: None,
                         })),
