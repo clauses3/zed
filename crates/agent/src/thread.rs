@@ -871,7 +871,16 @@ impl Thread {
         self.tool_use
             .pending_tool_uses()
             .iter()
-            .all(|tool_use| tool_use.status.is_error())
+            .all(|pending_tool_use| pending_tool_use.status.is_error())
+    }
+
+    /// Returns whether any pending tool uses may perform edits
+    pub fn has_pending_edit_tool_uses(&self) -> bool {
+        self.tool_use
+            .pending_tool_uses()
+            .iter()
+            .filter(|pending_tool_use| !pending_tool_use.status.is_error())
+            .any(|pending_tool_use| pending_tool_use.may_perform_edits)
     }
 
     pub fn tool_uses_for_message(&self, id: MessageId, cx: &App) -> Vec<ToolUse> {
@@ -1023,6 +1032,7 @@ impl Thread {
         id: MessageId,
         new_role: Role,
         new_segments: Vec<MessageSegment>,
+        creases: Vec<MessageCrease>,
         loaded_context: Option<LoadedContext>,
         checkpoint: Option<GitStoreCheckpoint>,
         cx: &mut Context<Self>,
@@ -1032,6 +1042,7 @@ impl Thread {
         };
         message.role = new_role;
         message.segments = new_segments;
+        message.creases = creases;
         if let Some(context) = loaded_context {
             message.loaded_context = context;
         }
@@ -1428,7 +1439,7 @@ impl Thread {
         messages: &mut Vec<LanguageModelRequestMessage>,
         cx: &App,
     ) {
-        const STALE_FILES_HEADER: &str = "These files changed since last read:";
+        const STALE_FILES_HEADER: &str = include_str!("./prompts/stale_files_prompt_header.txt");
 
         let mut stale_message = String::new();
 
@@ -1440,7 +1451,7 @@ impl Thread {
             };
 
             if stale_message.is_empty() {
-                write!(&mut stale_message, "{}\n", STALE_FILES_HEADER).ok();
+                write!(&mut stale_message, "{}\n", STALE_FILES_HEADER.trim()).ok();
             }
 
             writeln!(&mut stale_message, "- {}", file.path().display()).ok();
@@ -1673,6 +1684,7 @@ impl Thread {
                                         }
                                         CompletionRequestStatus::ToolUseLimitReached => {
                                             thread.tool_use_limit_reached = true;
+                                            cx.emit(ThreadEvent::ToolUseLimitReached);
                                         }
                                     }
                                 }
@@ -1854,10 +1866,7 @@ impl Thread {
             return;
         }
 
-        let added_user_message = "Generate a concise 3-7 word title for this conversation, omitting punctuation. \
-            Go straight to the title, without any preamble and prefix like `Here's a concise suggestion:...` or `Title:`. \
-            If the conversation is about a specific subject, include it in the title. \
-            Be descriptive. DO NOT speak in the first person.";
+        let added_user_message = include_str!("./prompts/summarize_thread_prompt.txt");
 
         let request = self.to_summarize_request(
             &model.model,
@@ -1958,12 +1967,7 @@ impl Thread {
             return;
         }
 
-        let added_user_message = "Generate a detailed summary of this conversation. Include:\n\
-             1. A brief overview of what was discussed\n\
-             2. Key facts or information discovered\n\
-             3. Outcomes or conclusions reached\n\
-             4. Any action items or next steps if any\n\
-             Format it in Markdown with headings and bullet points.";
+        let added_user_message = include_str!("./prompts/summarize_thread_detailed_prompt.txt");
 
         let request = self.to_summarize_request(
             &model,
@@ -2851,6 +2855,7 @@ pub enum ThreadEvent {
     },
     CheckpointChanged,
     ToolConfirmationNeeded,
+    ToolUseLimitReached,
     CancelEditing,
     CompletionCanceled,
 }

@@ -1,6 +1,6 @@
-use anyhow::{Context as _, anyhow, bail};
+use anyhow::{Context as _, bail};
 use dap::{
-    StartDebuggingRequestArguments, StartDebuggingRequestArgumentsRequest,
+    StartDebuggingRequestArguments,
     adapters::{
         DebugTaskDefinition, DownloadedFileType, download_adapter_from_github,
         latest_github_release,
@@ -76,8 +76,8 @@ impl GoDebugAdapter {
 
         let path = paths::debug_adapters_dir()
             .join("delve-shim-dap")
-            .join(format!("delve-shim-dap{}", asset.tag_name))
-            .join("delve-shim-dap");
+            .join(format!("delve-shim-dap_{}", asset.tag_name))
+            .join(format!("delve-shim-dap{}", std::env::consts::EXE_SUFFIX));
         self.shim_path.set(path.clone()).ok();
 
         Ok(path)
@@ -350,24 +350,6 @@ impl DebugAdapter for GoDebugAdapter {
         })
     }
 
-    fn validate_config(
-        &self,
-        config: &serde_json::Value,
-    ) -> Result<StartDebuggingRequestArgumentsRequest> {
-        let map = config.as_object().context("Config isn't an object")?;
-
-        let request_variant = map
-            .get("request")
-            .and_then(|val| val.as_str())
-            .context("request argument is not found or invalid")?;
-
-        match request_variant {
-            "launch" => Ok(StartDebuggingRequestArgumentsRequest::Launch),
-            "attach" => Ok(StartDebuggingRequestArgumentsRequest::Attach),
-            _ => Err(anyhow!("request must be either 'launch' or 'attach'")),
-        }
-    }
-
     fn config_from_zed_format(&self, zed_scenario: ZedDebugConfig) -> Result<DebugScenario> {
         let mut args = match &zed_scenario.request {
             dap::DebugRequest::Attach(attach_config) => {
@@ -414,13 +396,15 @@ impl DebugAdapter for GoDebugAdapter {
         &self,
         delegate: &Arc<dyn DapDelegate>,
         task_definition: &DebugTaskDefinition,
-        _user_installed_path: Option<PathBuf>,
+        user_installed_path: Option<PathBuf>,
         _cx: &mut AsyncApp,
     ) -> Result<DebugAdapterBinary> {
         let adapter_path = paths::debug_adapters_dir().join(&Self::ADAPTER_NAME);
         let dlv_path = adapter_path.join("dlv");
 
-        let delve_path = if let Some(path) = delegate.which(OsStr::new("dlv")).await {
+        let delve_path = if let Some(path) = user_installed_path {
+            path.to_string_lossy().to_string()
+        } else if let Some(path) = delegate.which(OsStr::new("dlv")).await {
             path.to_string_lossy().to_string()
         } else if delegate.fs().is_file(&dlv_path).await {
             dlv_path.to_string_lossy().to_string()
@@ -486,7 +470,7 @@ impl DebugAdapter for GoDebugAdapter {
             connection: None,
             request_args: StartDebuggingRequestArguments {
                 configuration: task_definition.config.clone(),
-                request: self.validate_config(&task_definition.config)?,
+                request: self.request_kind(&task_definition.config)?,
             },
         })
     }
